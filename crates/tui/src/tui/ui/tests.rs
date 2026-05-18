@@ -2189,13 +2189,12 @@ fn footer_state_label_drops_thinking_and_prefers_compacting() {
     // signal. `is_loading` alone falls through to "ready"; `is_compacting`
     // still wins because compacting is a less-common, distinct state.
     let mut app = create_test_app();
-    assert_eq!(footer_state_label(&app).0, "ready");
+    assert!(footer_state_label(&app).0.contains("Ready"), "idle state should show Ready");
 
     app.is_loading = true;
-    assert_eq!(
-        footer_state_label(&app).0,
-        "ready",
-        "is_loading must NOT produce a `thinking` text label — the animation handles it"
+    assert!(
+        footer_state_label(&app).0.contains("Ready"),
+        "is_loading must NOT produce a `thinking` text label — the whale idle label should show instead"
     );
 
     app.is_compacting = true;
@@ -2229,7 +2228,7 @@ fn footer_status_line_spans_show_mode_and_model_idle_and_active() {
     assert!(idle.contains("agent"));
     assert!(idle.contains("deepseek-v4-flash"));
     assert!(idle.contains("\u{00B7}"));
-    assert!(!idle.contains("ready"));
+    assert!(idle.contains("Ready"), "idle whale should be visible now");
 
     // is_loading no longer adds a "thinking" text label — the live-work
     // signal is the animated water-spout strip the renderer paints into

@@ -690,6 +690,14 @@ pub(crate) fn footer_status_line_spans(app: &App, max_width: usize) -> Vec<Span<
     spans
 }
 
+fn footer_idle_label(locale: crate::localization::Locale) -> &'static str {
+    match locale {
+        crate::localization::Locale::ZhHans => "▗▄▖ 就绪 (Ready)",
+        crate::localization::Locale::Ja => "▗▄▖ 待機中",
+        _ => "▗▄▖ Ready",
+    }
+}
+
 pub(crate) fn footer_state_label(app: &App) -> (&'static str, ratatui::style::Color) {
     if app.is_compacting {
         return ("compacting \u{238B}", app.ui_theme.status_warning);
@@ -715,7 +723,8 @@ pub(crate) fn footer_state_label(app: &App) -> (&'static str, ratatui::style::Co
         return ("draft", app.ui_theme.text_muted);
     }
 
-    ("ready", app.ui_theme.status_ready)
+    // Show idle whale via footer_idle_label
+    (footer_idle_label(app.ui_locale), app.ui_theme.status_ready)
 }
 
 #[cfg(test)]

@@ -15,7 +15,6 @@ const DOCUMENTS_BODY: &str = include_str!("../../assets/skills/documents/SKILL.m
 const PRESENTATIONS_BODY: &str = include_str!("../../assets/skills/presentations/SKILL.md");
 const SPREADSHEETS_BODY: &str = include_str!("../../assets/skills/spreadsheets/SKILL.md");
 const PDF_BODY: &str = include_str!("../../assets/skills/pdf/SKILL.md");
-const FEISHU_BODY: &str = include_str!("../../assets/skills/feishu/SKILL.md");
 
 struct BundledSkill {
     name: &'static str,
@@ -72,11 +71,6 @@ const BUNDLED_SKILLS: &[BundledSkill] = &[
     BundledSkill {
         name: "pdf",
         body: PDF_BODY,
-        introduced_in: 3,
-    },
-    BundledSkill {
-        name: "feishu",
-        body: FEISHU_BODY,
         introduced_in: 3,
     },
 ];

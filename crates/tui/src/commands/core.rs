@@ -367,6 +367,33 @@ pub fn translate(app: &mut App) -> CommandResult {
     }
 }
 
+/// Toggle UI locale between Simplified Chinese (zh-Hans) and English (en).
+/// Saves immediately so the choice persists across restarts.
+pub fn yr(app: &mut App) -> CommandResult {
+    use crate::localization::Locale;
+
+    let new_locale = match app.ui_locale {
+        Locale::ZhHans => Locale::En,
+        _ => Locale::ZhHans,
+    };
+
+    let tag = new_locale.tag();
+    match app.set_locale_from_onboarding(tag) {
+        Ok(()) => {
+            CommandResult::message(format!(
+                "语言 (Language): {}  {}",
+                match new_locale {
+                    Locale::ZhHans => "简体中文",
+                    Locale::En => "English",
+                    _ => tag,
+                },
+                tag
+            ))
+        }
+        Err(e) => CommandResult::error(format!("Failed to save locale: {e}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -2249,8 +2249,8 @@ async fn run_event_loop(
                             onboarding::advance_onboarding_from_welcome(app);
                         }
                         OnboardingState::Language => {
-                            // Enter without a digit pick keeps the existing
-                            // setting (which defaults to "auto").
+                            // Enter without a digit pick defaults to zh-Hans
+                            let _ = app.set_locale_from_onboarding("zh-Hans");
                             onboarding::advance_onboarding_after_language(app);
                         }
                         OnboardingState::ApiKey => {
@@ -3789,6 +3789,10 @@ fn replace_matching_assistant_text(
 // Streaming-thinking lifecycle helpers moved to `tui/streaming_thinking.rs`.
 
 fn build_queued_message(app: &mut App, input: String) -> QueuedMessage {
+    // Bagua: detect task type from first message before it's consumed
+    if app.bagua_mode_suggestion.is_none() {
+        app.bagua_detect_task(&input);
+    }
     let skill_instruction = app.active_skill.take();
     QueuedMessage::new(input, skill_instruction)
 }
@@ -4205,6 +4209,26 @@ async fn switch_provider(
     }
     if let Some(ref model) = model_override {
         config.default_text_model = Some(model.clone());
+    }
+
+    // Check for missing API key before attempting client creation
+    let needs_key = !matches!(target, ApiProvider::Ollama);
+    let key_ok = config.deepseek_api_key().is_ok_and(|k| !k.is_empty());
+    if needs_key && !key_ok {
+        config.provider = previous_provider_str;
+        config.base_url = previous_base_url;
+        config.default_text_model = previous_default_text_model;
+        app.add_message(HistoryCell::System {
+            content: format!(
+                "没有 API Key，无法切换到 {name}。\n\
+                 \n   获取 API Key：https://platform.deepseek.com/api_keys\n\
+                 配置方式：编辑 ~/.deepseek/config.toml 添加 api_key = \"sk-...\"\n\
+                 \n   当前保持为 {prev}。",
+                name = target.as_str(),
+                prev = previous_provider.as_str()
+            ),
+        });
+        return;
     }
 
     if let Err(err) = DeepSeekClient::new(config) {

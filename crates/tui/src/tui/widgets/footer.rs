@@ -93,6 +93,18 @@ const WAVE_GLYPHS: [char; 8] = [
     '\u{2588}', // █
 ];
 
+/// Rotating whale spinner — 8 frames of a tiny whale silhouette turning through 360°
+const WHALE_SPIN: [&str; 8] = [
+    "▗▄▖",  // 0°   face right
+    "▐▀▌",  // 45°
+    "▐▄▌",  // 90°  face up
+    "▝█▘",  // 135°
+    "▖█▗",  // 180° face left
+    "▐▄▌",  // 225°
+    "▐▀▌",  // 270° face down
+    "▗█▖",  // 315°
+];
+
 /// One frame of the footer's live-work wave animation. `col` is the cell
 /// index inside the strip, `width` the strip's total width, `frame` the raw
 /// millisecond counter. Returns the glyph that should appear in that cell on
@@ -134,19 +146,18 @@ pub fn footer_working_strip_string(width: usize, frame: u64) -> String {
     out
 }
 
-/// Pulse the localized "working" label through 0–3 trailing ASCII dots
-/// keyed off `frame`. The cycle period is 4 frames (matching the four
-/// states), so adjacent ticks visibly differ. Dots stay ASCII regardless
-/// of locale so the animation reads identically across scripts. Returns a
-/// `String` so callers can drop it into a `Span::styled` without lifetime
-/// gymnastics.
+/// Whale spinner + localized "working" label + trailing dots.
+/// Whale rotates through 8 frames; dots pulse 0–3 on a 4-frame cycle.
 #[must_use]
 pub fn footer_working_label(frame: u64, locale: Locale) -> String {
-    let dots = (frame % 4) as usize;
+    let whale = WHALE_SPIN[(frame % 8) as usize];
+    let dots_count = ((frame / 2) % 4) as usize;
     let base = tr(locale, MessageId::FooterWorking);
-    let mut out = String::with_capacity(base.len() + dots);
+    let mut out = String::with_capacity(16);
+    out.push_str(whale);
+    out.push(' ');
     out.push_str(base);
-    for _ in 0..dots {
+    for _ in 0..dots_count {
         out.push('.');
     }
     out
@@ -375,7 +386,7 @@ impl FooterWidget {
         let mode_label = self.props.mode_label;
         let sep = " \u{00B7} ";
         let model = self.props.model.as_str();
-        let show_status = self.props.state_label != "ready";
+        let show_status = true;
         let status_label = self.props.state_label.as_str();
         let cost_text = spans_text(&self.props.cost);
         let show_cost = !cost_text.is_empty();
@@ -1012,7 +1023,9 @@ mod tests {
         let rendered: String = (0..area.width).map(|x| buf[(x, 0)].symbol()).collect();
         assert!(rendered.contains("agent"));
         assert!(rendered.contains("deepseek-v4-flash"));
-        assert!(!rendered.contains("ready"));
+        // Status label is always shown now (was previously hidden for "ready")
+        assert!(rendered.contains("agent"), "mode should be visible");
+        assert!(rendered.contains("deepseek-v4-flash"), "model should be visible");
     }
 
     #[test]
@@ -1099,19 +1112,15 @@ mod tests {
 
     #[test]
     fn working_label_pulses_dots_through_full_cycle() {
-        // The label sequence `working` → `working.` → `working..` →
-        // `working...` then wraps back. Each frame is a discrete tick;
-        // the cycle is exactly 4 frames so adjacent ticks visibly differ.
-        assert_eq!(super::footer_working_label(0, Locale::En), "working");
-        assert_eq!(super::footer_working_label(1, Locale::En), "working.");
-        assert_eq!(super::footer_working_label(2, Locale::En), "working..");
-        assert_eq!(super::footer_working_label(3, Locale::En), "working...");
-        assert_eq!(
-            super::footer_working_label(4, Locale::En),
-            "working",
-            "wraps back at frame 4",
-        );
-        assert_eq!(super::footer_working_label(7, Locale::En), "working...");
+        // Whale spinner rotates through WHALE_SPIN[frame % 8],
+        // dots cycle 0,0,1,1,2,2,3,3 over 8 frames.
+        let w = |f: u64| super::WHALE_SPIN[(f % 8) as usize];
+        assert_eq!(super::footer_working_label(0, Locale::En), format!("{} working", w(0)));
+        assert_eq!(super::footer_working_label(1, Locale::En), format!("{} working", w(1)));
+        assert_eq!(super::footer_working_label(2, Locale::En), format!("{} working.", w(2)));
+        assert_eq!(super::footer_working_label(3, Locale::En), format!("{} working.", w(3)));
+        assert_eq!(super::footer_working_label(8, Locale::En), format!("{} working", w(8)),
+                  "wraps back at frame 8");
     }
 
     /// Render the footer at `width` and return the visible single-line text.

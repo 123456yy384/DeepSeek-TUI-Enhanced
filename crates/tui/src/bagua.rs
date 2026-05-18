@@ -20,6 +20,7 @@ pub fn detect_task_mode(first_message: &str) -> Option<AppMode> {
         "design", "plan", "review", "analyze", "explore", "audit",
         "architecture", "refactor", "investigate", "what is", "how does",
         "explain", "文档", "总结", "梳理", "画图", "diagram",
+        "架构", "数据库", "重构", "方案", "报告",
     ];
     // YOLO mode indicators — fast, direct, bulk operations
     let yolo_keywords = [
@@ -84,6 +85,7 @@ pub fn score_message_relevance(
 
 /// Score and rank messages for compaction. Returns indices sorted by score
 /// (lowest first = discard these first).
+#[allow(dead_code)]
 pub fn rank_messages_for_compaction(
     total: usize,
     user_indices: &[usize],
@@ -109,6 +111,7 @@ pub fn rank_messages_for_compaction(
 /// overfitting. Here we apply the same principle to session context: each session
 /// builds its own working memory that is completely discarded when switching.
 #[derive(Default, Clone)]
+#[allow(dead_code)]
 pub struct SessionMemory {
     pub key_facts: Vec<String>,
     pub user_preferences: Vec<String>,
@@ -169,5 +172,94 @@ impl SessionMemory {
             ));
         }
         Some(parts.join(" | "))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::app::AppMode;
+
+    #[test]
+    fn detect_plan_mode_from_design_keywords() {
+        assert_eq!(detect_task_mode("请帮我设计一个数据库架构"), Some(AppMode::Plan));
+        assert_eq!(detect_task_mode("review this code and analyze the bugs"), Some(AppMode::Plan));
+    }
+
+    #[test]
+    fn detect_yolo_mode_from_fast_keywords() {
+        assert_eq!(detect_task_mode("快速把全部文件重命名"), Some(AppMode::Yolo));
+        assert_eq!(detect_task_mode("just do it auto fast all files"), Some(AppMode::Yolo));
+    }
+
+    #[test]
+    fn no_detection_for_neutral_text() {
+        assert_eq!(detect_task_mode("你好"), None);
+        assert_eq!(detect_task_mode("帮我写一个函数"), None);
+        assert_eq!(detect_task_mode("hello world"), None);
+    }
+
+    #[test]
+    fn relevance_scoring_prefers_recent_user_messages() {
+        let old_tool = score_message_relevance(0, 100, false, true, 50, false);
+        let new_user = score_message_relevance(90, 100, true, false, 200, false);
+        assert!(new_user > old_tool, "recent user messages should score higher than old tool results");
+    }
+
+    #[test]
+    fn error_messages_score_low() {
+        let normal = score_message_relevance(50, 100, false, true, 500, false);
+        let error = score_message_relevance(50, 100, false, true, 500, true);
+        assert!(error < normal, "error messages should score lower");
+    }
+
+    #[test]
+    fn short_messages_score_low() {
+        let long = score_message_relevance(50, 100, false, false, 300, false);
+        let short = score_message_relevance(50, 100, false, false, 10, false);
+        assert!(short < long, "short messages should score lower");
+    }
+
+    #[test]
+    fn message_ranking_sorts_by_score() {
+        let user_indices = vec![0, 3];
+        let error_indices = vec![2];
+        let content_lengths = vec![100, 50, 10, 200, 30];
+        let ranked = rank_messages_for_compaction(5, &user_indices, &error_indices, &content_lengths);
+        // First item should have lowest score
+        assert!(ranked[0].1 <= ranked[1].1, "first item should have lowest score");
+        // Last item should have highest score
+        assert!(ranked[4].1 >= ranked[3].1, "last item should have highest score");
+        // All scores should be in [0.0, 1.0]
+        for (_, score) in &ranked {
+            assert!((0.0..=1.0).contains(score), "score {score} should be in [0,1]");
+        }
+    }
+
+    #[test]
+    fn session_memory_clears_on_session_change() {
+        let mut mem = SessionMemory::new();
+        mem.record_fact("fact 1");
+        mem.record_preference("pref 1");
+        assert!(!mem.key_facts.is_empty());
+
+        // Same session — no clear
+        assert!(!mem.check_session("session-a"));
+
+        // Different session — clears
+        assert!(mem.check_session("session-b"));
+        assert!(mem.key_facts.is_empty());
+        assert!(mem.user_preferences.is_empty());
+    }
+
+    #[test]
+    fn session_memory_context_string() {
+        let mut mem = SessionMemory::new();
+        mem.record_fact("用户使用 Rust");
+        mem.record_fact("偏好暗色主题");
+        mem.record_preference("简洁风格");
+        let ctx = mem.to_context_string().unwrap();
+        assert!(ctx.contains("Rust"));
+        assert!(ctx.contains("暗色"));
     }
 }

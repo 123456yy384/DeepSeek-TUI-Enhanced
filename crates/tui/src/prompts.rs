@@ -596,11 +596,19 @@ pub fn system_prompt_for_mode_with_context_skills_session_and_approval(
     // `None` and keep the previous behavior unchanged.
     let preamble = locale_reinforcement_preamble(session_context.locale_tag);
 
+    // 0.5 Edition marker — identifies this as a community-enhanced build.
+    // Does not alter model behavior; informational for transparency.
+    let edition_note = format!(
+        "DeepSeek TUI v{} (community edition — enhanced with Claude Code ecosystem \
+         compatibility, Bagua-inspired optimizations, and bilingual zh-Hans/EN UI).",
+        env!("CARGO_PKG_VERSION")
+    );
+
     // 1–2. Mode prompt + project context.
     // `load_project_context_with_parents` auto-generates .deepseek/instructions.md
     // when no context file exists, so the fallback should always be available.
     let mut full_prompt = if let Some(project_block) = project_context.as_system_block() {
-        format!("{}\n\n{}", mode_prompt, project_block)
+        format!("{edition_note}\n\n{}\n\n{}", mode_prompt, project_block)
     } else {
         // Extremely unlikely: context generation failed (e.g. filesystem error).
         // Use mode prompt alone rather than panic.

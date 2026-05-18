@@ -863,6 +863,11 @@ pub struct App {
     pub verbose_transcript: bool,
     pub show_tool_details: bool,
     pub ui_locale: Locale,
+    #[allow(dead_code)]
+    pub bagua_memory: crate::bagua::SessionMemory,
+    /// Suggested mode from task detection (None = no suggestion yet)
+    #[allow(dead_code)]
+    pub bagua_mode_suggestion: Option<(AppMode, String)>,
     pub cost_currency: CostCurrency,
     pub composer_density: ComposerDensity,
     pub composer_border: bool,
@@ -1508,6 +1513,8 @@ impl App {
             verbose_transcript: false,
             show_tool_details,
             ui_locale,
+            bagua_memory: crate::bagua::SessionMemory::new(),
+            bagua_mode_suggestion: None,
             cost_currency,
             composer_density,
             composer_border,
@@ -1693,6 +1700,43 @@ impl App {
         self.ui_locale = crate::localization::resolve_locale(&settings.locale);
         self.needs_redraw = true;
         Ok(())
+    }
+
+    /// Run Bagua task detection on the user's draft and suggest mode if confident.
+    /// Call this right before sending the first message of a session.
+    pub fn bagua_detect_task(&mut self, draft: &str) {
+        if let Some(suggested) = crate::bagua::detect_task_mode(draft) {
+            let mode_name = match suggested {
+                AppMode::Plan => "Plan",
+                AppMode::Agent => "Agent",
+                AppMode::Yolo => "YOLO",
+            };
+            // Show a toast suggesting the detected mode
+            self.push_status_toast(
+                format!("Bagua 检测到任务类型: {mode_name} 模式 (用 /mode {mode_name} 切换)"),
+                crate::tui::app::StatusToastLevel::Info,
+                Some(5000),
+            );
+            self.bagua_mode_suggestion = Some((suggested, mode_name.to_string()));
+        }
+    }
+
+    /// Check session memory — returns true if session changed and memory was cleared.
+    #[allow(dead_code)]
+    pub fn bagua_check_session(&mut self, session_id: &str) -> bool {
+        self.bagua_memory.check_session(session_id)
+    }
+
+    /// Record a key fact into session memory.
+    #[allow(dead_code)]
+    pub fn bagua_record_fact(&mut self, fact: impl Into<String>) {
+        self.bagua_memory.record_fact(fact);
+    }
+
+    /// Get bagua session memory context string for system prompt injection.
+    #[allow(dead_code)]
+    pub fn bagua_context(&self) -> Option<String> {
+        self.bagua_memory.to_context_string()
     }
 
     /// Locale tag currently persisted in `~/.deepseek/settings.toml` (or

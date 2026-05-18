@@ -17,6 +17,7 @@ mod artifacts;
 mod audit;
 mod auto_reasoning;
 mod automation_manager;
+mod bagua;
 mod child_env;
 mod client;
 mod command_safety;
