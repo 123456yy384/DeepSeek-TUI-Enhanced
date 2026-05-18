@@ -1616,7 +1616,9 @@ fn chinese_simplified(id: MessageId) -> Option<&'static str> {
         MessageId::ConfigNoMatchesPrefix => "  无匹配 (No match)：",
         MessageId::ConfigFilteredSettings => "  筛选结果 (Filtered)",
         MessageId::ConfigShowing => "  显示 (Showing)",
-        MessageId::ConfigFooterDefault => " 输入=筛选(Type)，↑↓=选择(Select)，Enter/e=编辑(Edit)，Esc/q=关闭(Close) ",
+        MessageId::ConfigFooterDefault => {
+            " 输入=筛选(Type)，↑↓=选择(Select)，Enter/e=编辑(Edit)，Esc/q=关闭(Close) "
+        }
         MessageId::ConfigFooterScrollable => {
             " 输入=筛选，↑↓=选择，Enter/e=编辑，PgUp/PgDn=翻页(Page)，Esc/q=关闭 "
         }
@@ -1680,7 +1682,9 @@ fn chinese_simplified(id: MessageId) -> Option<&'static str> {
         MessageId::CmdModelsDescription => "API 可用模型列表 (/models)",
         MessageId::CmdNetworkDescription => "网络访问规则 (/network)——允许/禁止",
         MessageId::CmdNoteDescription => "工作区笔记 (/note)——添加、列出、编辑、删除",
-        MessageId::CmdThemeDescription => "主题切换 (/theme)：深色(dark)、浅色(light)、灰度(gray)、系统(system)",
+        MessageId::CmdThemeDescription => {
+            "主题切换 (/theme)：深色(dark)、浅色(light)、灰度(gray)、系统(system)"
+        }
         MessageId::CmdProviderDescription => {
             "LLM 后端切换 (/provider)：deepseek | nvidia-nim | ollama"
         }
@@ -1688,9 +1692,7 @@ fn chinese_simplified(id: MessageId) -> Option<&'static str> {
         MessageId::CmdRecallDescription => "历史循环检索 (/recall)——BM25 消息文本搜索",
         MessageId::CmdRelayDescription => "会话接力摘要 (/relay)——给新线程",
         MessageId::CmdRenameDescription => "重命名会话 (/rename)",
-        MessageId::CmdRestoreDescription => {
-            "工作区快照回滚 (/restore)。无参数列出最近快照。"
-        }
+        MessageId::CmdRestoreDescription => "工作区快照回滚 (/restore)。无参数列出最近快照。",
         MessageId::CmdRetryDescription => "重试上次请求 (/retry)",
         MessageId::CmdReviewDescription => "代码审查 (/review)——文件、diff 或 PR",
         MessageId::CmdRlmDescription => "持久化 RLM 上下文 (/rlm) [0-3] <文件或文本>",
@@ -1718,9 +1720,7 @@ fn chinese_simplified(id: MessageId) -> Option<&'static str> {
         MessageId::TranslationInProgress => "正在翻译助手输出… (Translating…)",
         MessageId::TranslationComplete => "翻译完成 (Translation Complete)",
         MessageId::TranslationFailed => "翻译失败 (Translation Failed)",
-        MessageId::CmdTrustDescription => {
-            "工作区信任管理 (/trust)——add <路径>、list、on|off"
-        }
+        MessageId::CmdTrustDescription => "工作区信任管理 (/trust)——add <路径>、list、on|off",
         MessageId::CmdWorkspaceDescription => "显示/切换工作区 (/workspace)",
         MessageId::CmdUndoDescription => "撤销最后消息对 (/undo)",
         MessageId::CmdVerboseDescription => "完整思考过程显示 (/verbose)——开关",
@@ -1874,7 +1874,9 @@ fn chinese_simplified(id: MessageId) -> Option<&'static str> {
         MessageId::OnboardApiKeyStep1 => {
             "步骤 1 (Step 1).  访问 https://platform.deepseek.com/api_keys 创建 Key。"
         }
-        MessageId::OnboardApiKeyStep2 => "步骤 2 (Step 2).  粘贴 Key 到下方，按 Enter。(Paste key, press Enter)",
+        MessageId::OnboardApiKeyStep2 => {
+            "步骤 2 (Step 2).  粘贴 Key 到下方，按 Enter。(Paste key, press Enter)"
+        }
         MessageId::OnboardApiKeySavedHint => {
             "Key 将保存在 ~/.deepseek/config.toml，全局生效。(Saved globally)"
         }
@@ -1886,7 +1888,9 @@ fn chinese_simplified(id: MessageId) -> Option<&'static str> {
         MessageId::OnboardTrustTitle => "信任工作目录 (Trust Workspace)",
         MessageId::OnboardTrustQuestion => "你信任此目录吗？(Trust this directory?)",
         MessageId::OnboardTrustLocationPrefix => "当前位置 (Location)：",
-        MessageId::OnboardTrustRiskHint => "不受信任的内容存在提示词注入风险。(Prompt injection risk)",
+        MessageId::OnboardTrustRiskHint => {
+            "不受信任的内容存在提示词注入风险。(Prompt injection risk)"
+        }
         MessageId::OnboardTrustEffectHint => {
             "信任后记录在全局配置，开启受信任模式。(Recorded globally)"
         }
@@ -1895,8 +1899,12 @@ fn chinese_simplified(id: MessageId) -> Option<&'static str> {
         MessageId::OnboardTrustFooterSuffix => " 退出 (Exit)",
         // Onboarding — final tips.
         MessageId::OnboardTipsTitle => "快速上手 (Quick Start)",
-        MessageId::OnboardTipsLine1 => "用自然语言描述任务。需要帮助输入 /help 或 Ctrl+K。(Describe, /help, Ctrl+K)",
-        MessageId::OnboardTipsLine2 => "多行输入：Enter 发送，Alt+Enter / Ctrl+J 换行。(Enter=send, Alt+Enter=newline)",
+        MessageId::OnboardTipsLine1 => {
+            "用自然语言描述任务。需要帮助输入 /help 或 Ctrl+K。(Describe, /help, Ctrl+K)"
+        }
+        MessageId::OnboardTipsLine2 => {
+            "多行输入：Enter 发送，Alt+Enter / Ctrl+J 换行。(Enter=send, Alt+Enter=newline)"
+        }
         MessageId::OnboardTipsLine3 => {
             "模式切换：Plan 先审后做，Agent 自主执行，YOLO 全自动免审批。(Plan/Agent/YOLO)"
         }

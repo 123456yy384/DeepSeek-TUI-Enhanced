@@ -405,18 +405,21 @@ pub fn plan_compaction(
     // Bagua scoring: rank messages by relevance to inform pruning order
     for (i, msg) in messages.iter().enumerate() {
         let is_user = msg.role == "user";
-        let text: String = msg.content.iter().filter_map(|b| match b {
-            crate::models::ContentBlock::Text { text, .. } => Some(text.clone()),
-            _ => None,
-        }).collect();
+        let text: String = msg
+            .content
+            .iter()
+            .filter_map(|b| match b {
+                crate::models::ContentBlock::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect();
         let text_len = text.len();
         let has_error = text_len < 20
             || text.contains("error")
             || text.contains("Error")
             || text.contains("failed");
-        let score = crate::bagua::score_message_relevance(
-            i, len, is_user, !is_user, text_len, has_error,
-        );
+        let score =
+            crate::bagua::score_message_relevance(i, len, is_user, !is_user, text_len, has_error);
         if score < 0.3 && !pinned_indices.contains(&i) {
             let _ = score; // Low relevance advisory — pruning follows existing logic
         }

@@ -379,17 +379,15 @@ pub fn yr(app: &mut App) -> CommandResult {
 
     let tag = new_locale.tag();
     match app.set_locale_from_onboarding(tag) {
-        Ok(()) => {
-            CommandResult::message(format!(
-                "语言 (Language): {}  {}",
-                match new_locale {
-                    Locale::ZhHans => "简体中文",
-                    Locale::En => "English",
-                    _ => tag,
-                },
-                tag
-            ))
-        }
+        Ok(()) => CommandResult::message(format!(
+            "语言 (Language): {}  {}",
+            match new_locale {
+                Locale::ZhHans => "简体中文",
+                Locale::En => "English",
+                _ => tag,
+            },
+            tag
+        )),
         Err(e) => CommandResult::error(format!("Failed to save locale: {e}")),
     }
 }

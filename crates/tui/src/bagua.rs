@@ -16,17 +16,54 @@ pub fn detect_task_mode(first_message: &str) -> Option<AppMode> {
 
     // Plan mode indicators — analysis, design, review, exploration
     let plan_keywords = [
-        "设计", "规划", "分析", "审查", "检查", "调研", "探索",
-        "design", "plan", "review", "analyze", "explore", "audit",
-        "architecture", "refactor", "investigate", "what is", "how does",
-        "explain", "文档", "总结", "梳理", "画图", "diagram",
-        "架构", "数据库", "重构", "方案", "报告",
+        "设计",
+        "规划",
+        "分析",
+        "审查",
+        "检查",
+        "调研",
+        "探索",
+        "design",
+        "plan",
+        "review",
+        "analyze",
+        "explore",
+        "audit",
+        "architecture",
+        "refactor",
+        "investigate",
+        "what is",
+        "how does",
+        "explain",
+        "文档",
+        "总结",
+        "梳理",
+        "画图",
+        "diagram",
+        "架构",
+        "数据库",
+        "重构",
+        "方案",
+        "报告",
     ];
     // YOLO mode indicators — fast, direct, bulk operations
     let yolo_keywords = [
-        "快速", "直接", "全部", "批量", "自动", "不用确认",
-        "fast", "all", "auto", "bulk", "quick", "just do",
-        "一口气", "全部改", "all files", "every file",
+        "快速",
+        "直接",
+        "全部",
+        "批量",
+        "自动",
+        "不用确认",
+        "fast",
+        "all",
+        "auto",
+        "bulk",
+        "quick",
+        "just do",
+        "一口气",
+        "全部改",
+        "all files",
+        "every file",
     ];
 
     let plan_score = plan_keywords.iter().filter(|k| msg.contains(*k)).count();
@@ -162,13 +199,23 @@ impl SessionMemory {
         if !self.key_facts.is_empty() {
             parts.push(format!(
                 "Key facts: {}",
-                self.key_facts.iter().take(5).cloned().collect::<Vec<_>>().join("; ")
+                self.key_facts
+                    .iter()
+                    .take(5)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("; ")
             ));
         }
         if !self.user_preferences.is_empty() {
             parts.push(format!(
                 "Preferences: {}",
-                self.user_preferences.iter().take(3).cloned().collect::<Vec<_>>().join("; ")
+                self.user_preferences
+                    .iter()
+                    .take(3)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("; ")
             ));
         }
         Some(parts.join(" | "))
@@ -182,14 +229,26 @@ mod tests {
 
     #[test]
     fn detect_plan_mode_from_design_keywords() {
-        assert_eq!(detect_task_mode("请帮我设计一个数据库架构"), Some(AppMode::Plan));
-        assert_eq!(detect_task_mode("review this code and analyze the bugs"), Some(AppMode::Plan));
+        assert_eq!(
+            detect_task_mode("请帮我设计一个数据库架构"),
+            Some(AppMode::Plan)
+        );
+        assert_eq!(
+            detect_task_mode("review this code and analyze the bugs"),
+            Some(AppMode::Plan)
+        );
     }
 
     #[test]
     fn detect_yolo_mode_from_fast_keywords() {
-        assert_eq!(detect_task_mode("快速把全部文件重命名"), Some(AppMode::Yolo));
-        assert_eq!(detect_task_mode("just do it auto fast all files"), Some(AppMode::Yolo));
+        assert_eq!(
+            detect_task_mode("快速把全部文件重命名"),
+            Some(AppMode::Yolo)
+        );
+        assert_eq!(
+            detect_task_mode("just do it auto fast all files"),
+            Some(AppMode::Yolo)
+        );
     }
 
     #[test]
@@ -203,7 +262,10 @@ mod tests {
     fn relevance_scoring_prefers_recent_user_messages() {
         let old_tool = score_message_relevance(0, 100, false, true, 50, false);
         let new_user = score_message_relevance(90, 100, true, false, 200, false);
-        assert!(new_user > old_tool, "recent user messages should score higher than old tool results");
+        assert!(
+            new_user > old_tool,
+            "recent user messages should score higher than old tool results"
+        );
     }
 
     #[test]
@@ -225,14 +287,24 @@ mod tests {
         let user_indices = vec![0, 3];
         let error_indices = vec![2];
         let content_lengths = vec![100, 50, 10, 200, 30];
-        let ranked = rank_messages_for_compaction(5, &user_indices, &error_indices, &content_lengths);
+        let ranked =
+            rank_messages_for_compaction(5, &user_indices, &error_indices, &content_lengths);
         // First item should have lowest score
-        assert!(ranked[0].1 <= ranked[1].1, "first item should have lowest score");
+        assert!(
+            ranked[0].1 <= ranked[1].1,
+            "first item should have lowest score"
+        );
         // Last item should have highest score
-        assert!(ranked[4].1 >= ranked[3].1, "last item should have highest score");
+        assert!(
+            ranked[4].1 >= ranked[3].1,
+            "last item should have highest score"
+        );
         // All scores should be in [0.0, 1.0]
         for (_, score) in &ranked {
-            assert!((0.0..=1.0).contains(score), "score {score} should be in [0,1]");
+            assert!(
+                (0.0..=1.0).contains(score),
+                "score {score} should be in [0,1]"
+            );
         }
     }
 

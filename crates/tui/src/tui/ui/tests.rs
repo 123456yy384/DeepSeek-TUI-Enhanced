@@ -2189,7 +2189,10 @@ fn footer_state_label_drops_thinking_and_prefers_compacting() {
     // signal. `is_loading` alone falls through to "ready"; `is_compacting`
     // still wins because compacting is a less-common, distinct state.
     let mut app = create_test_app();
-    assert!(footer_state_label(&app).0.contains("Ready"), "idle state should show Ready");
+    assert!(
+        footer_state_label(&app).0.contains("Ready"),
+        "idle state should show Ready"
+    );
 
     app.is_loading = true;
     assert!(

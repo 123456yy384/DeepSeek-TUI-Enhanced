@@ -24,23 +24,33 @@ fn full_lines() -> Vec<Line<'static>> {
         )),
         Line::from(Span::styled(
             "  ║     ██████  ███████  ██████  ██████  ║",
-            Style::default().fg(palette::DEEPSEEK_SKY).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(palette::DEEPSEEK_SKY)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "  ║     ██   ██ ██      ██      ██      ║",
-            Style::default().fg(palette::DEEPSEEK_SKY).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(palette::DEEPSEEK_SKY)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "  ║     ██   ██ █████   ██████  █████   ║",
-            Style::default().fg(palette::DEEPSEEK_BLUE).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(palette::DEEPSEEK_BLUE)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "  ║     ██   ██ ██          ██ ██      ║",
-            Style::default().fg(palette::DEEPSEEK_BLUE).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(palette::DEEPSEEK_BLUE)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "  ║     ██████  ███████ ██████  ██████  ║",
-            Style::default().fg(palette::DEEPSEEK_SKY).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(palette::DEEPSEEK_SKY)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             "  ║                                      ║",
@@ -78,7 +88,9 @@ pub fn compact_lines() -> Vec<Line<'static>> {
     vec![
         Line::from(Span::styled(
             "DeepSeek TUI",
-            Style::default().fg(palette::DEEPSEEK_BLUE).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(palette::DEEPSEEK_BLUE)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::styled(
             format!("v{}", env!("CARGO_PKG_VERSION")),
