@@ -170,6 +170,7 @@ impl SessionMemory {
     }
 
     /// Record a user preference discovered during this session.
+    #[allow(dead_code)]
     pub fn record_preference(&mut self, pref: impl Into<String>) {
         self.user_preferences.push(pref.into());
     }

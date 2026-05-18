@@ -334,6 +334,7 @@ pub enum MessageId {
     FooterAgentsPlural,
     FooterPressCtrlCAgain,
     FooterWorking,
+    #[allow(dead_code)]
     FooterIdle,
     HelpSectionActions,
     HelpSectionClipboard,
