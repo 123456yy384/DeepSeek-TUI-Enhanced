@@ -15,6 +15,8 @@ fn main() {
         .unwrap_or_else(|| package_version.to_string());
 
     println!("cargo:rustc-env=DEEPSEEK_BUILD_VERSION={build_version}");
+
+    embed_icon();
 }
 
 /// Tell Cargo to invalidate the cached build script output when `HEAD`
@@ -171,3 +173,19 @@ fn short_sha(value: String) -> Option<String> {
     }
     Some(trimmed.chars().take(12).collect())
 }
+
+#[cfg(windows)]
+fn embed_icon() {
+    let icon = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..").join("..").join("assets").join("icon.ico");
+    if icon.exists() {
+        let mut res = winres::WindowsResource::new();
+        res.set_icon(icon.to_str().unwrap());
+        if let Err(e) = res.compile() {
+            eprintln!("winres: icon embedding failed: {e}");
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn embed_icon() {}

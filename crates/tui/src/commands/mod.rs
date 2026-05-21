@@ -1016,49 +1016,112 @@ fn suggest_command_names(input: &str, limit: usize) -> Vec<String> {
         return Vec::new();
     }
 
-    let mut scored: Vec<(u8, usize, String)> = Vec::new();
+    let mut scored: Vec<(usize, usize, String)> = Vec::new();
     for command in COMMANDS {
-        let mut best: Option<(u8, usize)> = None;
+        let mut best_score: Option<usize> = None;
         for candidate in std::iter::once(command.name).chain(command.aliases.iter().copied()) {
             let candidate = candidate.to_ascii_lowercase();
-            let prefix_match = candidate.starts_with(&query) || query.starts_with(&candidate);
-            let contains_match = candidate.contains(&query) || query.contains(&candidate);
-            let distance = edit_distance(&candidate, &query);
-            let close_typo = distance <= 2;
-            if !(prefix_match || contains_match || close_typo) {
-                continue;
+
+            // 1. Exact match (highest priority)
+            if candidate == query {
+                best_score = Some(0);
+                break;
             }
 
-            let rank = if prefix_match {
-                0
-            } else if contains_match {
-                1
+            // 2. Prefix match
+            let prefix_score = if candidate.starts_with(&query) || query.starts_with(&candidate) {
+                Some(1)
             } else {
-                2
+                None
             };
 
-            match best {
-                Some((best_rank, best_distance))
-                    if rank > best_rank || (rank == best_rank && distance >= best_distance) => {}
-                _ => best = Some((rank, distance)),
+            // 3. Contains match
+            let contains_score = if candidate.contains(&query) || query.contains(&candidate) {
+                Some(2)
+            } else {
+                None
+            };
+
+            // 4. Edit distance (typo-tolerant)
+            let distance = edit_distance(&candidate, &query);
+            let typo_score = if distance <= 2 { Some(3) } else { None };
+
+            // 5. Fuzzy subsequence match (new — like Fuse.js)
+            let fuzzy_score = fuzzy_match_score(&candidate, &query);
+
+            // Take best available
+            let s = [prefix_score, contains_score, typo_score, fuzzy_score]
+                .into_iter()
+                .flatten()
+                .min()
+                .unwrap_or(usize::MAX);
+
+            if s < best_score.unwrap_or(usize::MAX) {
+                best_score = Some(s);
             }
         }
 
-        if let Some((rank, distance)) = best {
-            scored.push((rank, distance, command.name.to_string()));
+        if let Some(score) = best_score {
+            if score < usize::MAX {
+                scored.push((score, 0, command.name.to_string()));
+            }
         }
     }
 
-    scored.sort_by(|a, b| {
-        a.0.cmp(&b.0)
-            .then_with(|| a.1.cmp(&b.1))
-            .then_with(|| a.2.cmp(&b.2))
-    });
+    scored.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
     scored
         .into_iter()
         .take(limit)
         .map(|(_, _, name)| name)
         .collect()
+}
+
+/// Fuzzy match score: check if query chars appear as a subsequence
+/// of candidate. Returns Some(score) if matched, None otherwise.
+/// Lower score is better (0 = exact prefix with contiguous chars).
+fn fuzzy_match_score(candidate: &str, query: &str) -> Option<usize> {
+    let mut q_chars = query.chars();
+    let mut current = q_chars.next()?;
+    let mut score = 10; // base fuzzy score
+    let mut matched = 0;
+    let mut contiguous = 0;
+    let mut max_contiguous = 0;
+    let mut prev_matched_idx: Option<usize> = None;
+
+    for (i, c) in candidate.char_indices() {
+        if c == current {
+            matched += 1;
+            // Bonus for contiguous matches
+            if prev_matched_idx == Some(i.saturating_sub(1)) || prev_matched_idx == Some(i.saturating_sub(c.len_utf8())) {
+                contiguous += 1;
+            } else {
+                contiguous = 1;
+            }
+            max_contiguous = max_contiguous.max(contiguous);
+            prev_matched_idx = Some(i);
+            current = match q_chars.next() {
+                Some(ch) => ch,
+                None => break,
+            };
+        }
+    }
+
+    if matched < query.len() {
+        return None; // not all chars matched
+    }
+
+    // Score adjustments
+    if matched == query.len() {
+        if max_contiguous == query.len() {
+            score -= 3; // full contiguous substring
+        }
+        if candidate.starts_with(query) {
+            score -= 4; // prefix — should be better than contains
+        }
+        score -= matched.saturating_sub(1); // more matches = better
+    }
+
+    Some(score.min(9)) // floor at 1 (above exact/prefix/typo)
 }
 
 #[cfg(test)]

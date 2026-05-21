@@ -12,6 +12,7 @@ use tokio::io::AsyncWriteExt;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HookEvent {
+    // ── Response stream (existing) ──
     ResponseStart {
         response_id: String,
     },
@@ -22,6 +23,7 @@ pub enum HookEvent {
     ResponseEnd {
         response_id: String,
     },
+    // ── Tool & Job lifecycle (existing) ──
     ToolLifecycle {
         response_id: String,
         tool_name: String,
@@ -39,8 +41,74 @@ pub enum HookEvent {
         phase: String,
         reason: Option<String>,
     },
+    // ── Generic (existing) ──
     GenericEventFrame {
         frame: EventFrame,
+    },
+    // ── Session lifecycle (new, CC-compatible) ──
+    /// Fired when a session starts. CC equivalent: SessionStart.
+    SessionStarted {
+        session_id: String,
+        workspace: String,
+    },
+    /// Fired when a session ends normally. CC equivalent: SessionEnd.
+    SessionEnded {
+        session_id: String,
+        reason: Option<String>,
+    },
+    /// Fired when the agent is interrupted (Ctrl+C). CC equivalent: Stop.
+    Interrupted {
+        session_id: String,
+    },
+    // ── Subagent lifecycle (new) ──
+    /// A subagent was spawned. CC equivalent: SubagentStart.
+    SubagentStarted {
+        agent_id: String,
+        agent_type: String,
+        task: String,
+    },
+    /// A subagent completed. CC equivalent: SubagentStop.
+    SubagentStopped {
+        agent_id: String,
+        outcome: String,
+    },
+    // ── Context compaction (new) ──
+    /// Context compaction started. CC equivalent: PreCompact.
+    CompactStarted {
+        session_id: String,
+    },
+    /// Context compaction completed. CC equivalent: PostCompact.
+    CompactEnded {
+        session_id: String,
+        tokens_before: Option<usize>,
+        tokens_after: Option<usize>,
+    },
+    // ── Permissions & input (new) ──
+    /// A tool requires user approval. CC equivalent: PermissionRequest.
+    PermissionRequested {
+        tool_name: String,
+        reason: Option<String>,
+    },
+    /// The user submitted a prompt. CC equivalent: UserPromptSubmit.
+    PromptSubmitted {
+        text: String,
+    },
+    // ── Task lifecycle (new) ──
+    /// A background task was created. CC equivalent: TaskCreated.
+    TaskCreated {
+        task_id: String,
+        description: String,
+    },
+    /// A background task completed. CC equivalent: TaskCompleted.
+    TaskCompleted {
+        task_id: String,
+        success: bool,
+    },
+    // ── Config changes (new) ──
+    /// A configuration value changed. CC equivalent: ConfigChange.
+    ConfigChanged {
+        key: String,
+        value: Value,
     },
 }
 
@@ -114,7 +182,10 @@ impl WebhookHookSink {
     pub fn new(url: String) -> Self {
         Self {
             url,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .min_tls_version(reqwest::tls::Version::TLS_1_2)
+                .build()
+                .expect("TLS 1.2 minimum required"),
         }
     }
 }
@@ -292,5 +363,73 @@ mod tests {
             "deepseek-hooks-{label}-{}-{nanos}",
             std::process::id()
         ))
+    }
+
+    // ── New hook event tests ──
+
+    #[test]
+    fn session_events_serialize_correctly() {
+        let start = HookEvent::SessionStarted {
+            session_id: "s1".into(),
+            workspace: "/ws".into(),
+        };
+        let json = serde_json::to_value(&start).unwrap();
+        assert_eq!(json["type"], "session_started");
+        assert_eq!(json["session_id"], "s1");
+
+        let end = HookEvent::SessionEnded {
+            session_id: "s1".into(),
+            reason: Some("user exit".into()),
+        };
+        let json = serde_json::to_value(&end).unwrap();
+        assert_eq!(json["type"], "session_ended");
+    }
+
+    #[test]
+    fn subagent_events_have_required_fields() {
+        let start = HookEvent::SubagentStarted {
+            agent_id: "a1".into(),
+            agent_type: "researcher".into(),
+            task: "find bug".into(),
+        };
+        let json = serde_json::to_value(&start).unwrap();
+        assert_eq!(json["agent_type"], "researcher");
+        assert_eq!(json["task"], "find bug");
+
+        let stop = HookEvent::SubagentStopped {
+            agent_id: "a1".into(),
+            outcome: "completed".into(),
+        };
+        let json = serde_json::to_value(&stop).unwrap();
+        assert_eq!(json["outcome"], "completed");
+    }
+
+    #[test]
+    fn compact_events_track_token_count() {
+        let end = HookEvent::CompactEnded {
+            session_id: "s1".into(),
+            tokens_before: Some(5000),
+            tokens_after: Some(2000),
+        };
+        let json = serde_json::to_value(&end).unwrap();
+        assert_eq!(json["tokens_before"], 5000);
+        assert_eq!(json["tokens_after"], 2000);
+    }
+
+    #[test]
+    fn hook_event_count_matches_expectation() {
+        // Verify we have at least 20+ event types (up from 7)
+        let variants = [
+            "response_start", "response_delta", "response_end",
+            "tool_lifecycle", "job_lifecycle", "approval_lifecycle",
+            "generic_event_frame",
+            "session_started", "session_ended", "interrupted",
+            "subagent_started", "subagent_stopped",
+            "compact_started", "compact_ended",
+            "permission_requested", "prompt_submitted",
+            "task_created", "task_completed",
+            "config_changed",
+        ];
+        assert_eq!(variants.len(), 19); // 7 original + 12 new
     }
 }

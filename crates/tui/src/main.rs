@@ -18,7 +18,9 @@ mod audit;
 mod auto_reasoning;
 mod automation_manager;
 mod bagua;
+mod cc_bridge;
 mod child_env;
+mod keybindings;
 mod client;
 mod command_safety;
 mod commands;
@@ -913,6 +915,13 @@ async fn main() -> Result<()> {
 
     // Default: Interactive TUI
     // --yolo starts in YOLO mode (shell + trust + auto-approve)
+
+    // Apply Claude Code ecosystem bridge (auto-import CC settings/MCP)
+    {
+        let workspace = resolve_workspace(&cli);
+        crate::cc_bridge::apply_cc_integration(&workspace);
+    }
+
     run_interactive(&cli, &config, resume_session_id, None).await
 }
 
