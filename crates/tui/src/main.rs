@@ -20,6 +20,7 @@ mod automation_manager;
 mod bagua;
 mod cc_bridge;
 mod child_env;
+mod input_guard;
 mod keybindings;
 mod client;
 mod command_safety;
@@ -1509,6 +1510,9 @@ fn run_setup_status(config: &Config, workspace: &Path) -> Result<()> {
                 crate::config::ApiProvider::Deepseek | crate::config::ApiProvider::DeepseekCN => {
                     ("DEEPSEEK_API_KEY", "deepseek auth set --provider deepseek")
                 }
+                crate::config::ApiProvider::Anthropic => {
+                    ("ANTHROPIC_API_KEY", "deepseek auth set --provider anthropic --api-key \"...\"")
+                }
             };
             println!(
                 "  {} api_key: missing  (set {env_var} or `[providers.{}].api_key` in ~/.deepseek/config.toml; or run `{login_hint}`)",
@@ -1525,6 +1529,7 @@ fn run_setup_status(config: &Config, workspace: &Path) -> Result<()> {
                     crate::config::ApiProvider::Ollama => "ollama",
                     crate::config::ApiProvider::Deepseek
                     | crate::config::ApiProvider::DeepseekCN => "deepseek",
+                    crate::config::ApiProvider::Anthropic => "anthropic",
                 }
             );
         }

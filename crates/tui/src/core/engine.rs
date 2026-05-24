@@ -365,6 +365,7 @@ impl Engine {
             ApiProvider::Sglang => "SGLANG_API_KEY",
             ApiProvider::Vllm => "VLLM_API_KEY",
             ApiProvider::Ollama => "OLLAMA_API_KEY",
+            ApiProvider::Anthropic => "ANTHROPIC_API_KEY/DEEPSEEK_API_KEY",
         };
 
         Some(format!(
@@ -875,7 +876,7 @@ impl Engine {
     #[allow(clippy::too_many_arguments)]
     async fn handle_send_message(
         &mut self,
-        content: String,
+        mut content: String,
         mode: AppMode,
         model: String,
         goal_objective: Option<String>,

@@ -2,6 +2,12 @@
 //!
 //! DeepSeek documents `/chat/completions` as the primary endpoint, and this
 //! client now routes all normal traffic through that surface.
+//!
+//! The Anthropic Messages API path (`/anthropic/v1/messages`) is in
+//! `client/anthropic.rs` — it uses structured content blocks with protocol-level
+//! role separation, making it immune to Special Token Injection.
+
+pub(super) mod anthropic;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
@@ -130,6 +136,19 @@ pub struct DeepSeekClient {
     default_model: String,
     connection_health: Arc<AsyncMutex<ConnectionHealth>>,
     rate_limiter: Arc<AsyncMutex<TokenBucket>>,
+    /// Cached endpoint mode. `None` means auto-detect on first request:
+    /// try Anthropic Messages API first, fall back to Chat Completions.
+    /// Once resolved, all subsequent requests use the cached mode.
+    endpoint_mode: Arc<AsyncMutex<Option<EndpointMode>>>,
+}
+
+/// Which API endpoint format to use for message requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EndpointMode {
+    /// Anthropic Messages API (`/anthropic/v1/messages`)
+    Anthropic,
+    /// OpenAI-compatible Chat Completions (`/v1/chat/completions`)
+    Chat,
 }
 
 const CONNECTION_FAILURE_THRESHOLD: u32 = 2;
@@ -296,6 +315,7 @@ impl Clone for DeepSeekClient {
             default_model: self.default_model.clone(),
             connection_health: self.connection_health.clone(),
             rate_limiter: self.rate_limiter.clone(),
+            endpoint_mode: self.endpoint_mode.clone(),
         }
     }
 }
@@ -503,6 +523,7 @@ impl DeepSeekClient {
             default_model,
             connection_health: Arc::new(AsyncMutex::new(ConnectionHealth::default())),
             rate_limiter: Arc::new(AsyncMutex::new(TokenBucket::from_env())),
+            endpoint_mode: Arc::new(AsyncMutex::new(None)),
         })
     }
 
@@ -778,6 +799,84 @@ fn retry_reason_label_and_human(err: &LlmError) -> (&'static str, String) {
     }
 }
 
+impl DeepSeekClient {
+    /// Returns `true` when this provider should attempt the Anthropic Messages
+    /// API before falling back to Chat Completions.
+    fn supports_anthropic_endpoint(&self) -> bool {
+        matches!(
+            self.api_provider,
+            ApiProvider::Deepseek
+                | ApiProvider::DeepseekCN
+                | ApiProvider::Anthropic
+        )
+    }
+
+    async fn resolve_endpoint_mode(&self) -> EndpointMode {
+        let mut cache = self.endpoint_mode.lock().await;
+        if let Some(mode) = *cache {
+            return mode;
+        }
+        // Not yet resolved — default to Anthropic for DeepSeek-family providers.
+        if self.supports_anthropic_endpoint() {
+            let mode = EndpointMode::Anthropic;
+            *cache = Some(mode);
+            mode
+        } else {
+            let mode = EndpointMode::Chat;
+            *cache = Some(mode);
+            mode
+        }
+    }
+
+    async fn fallback_to_chat(&self) {
+        let mut cache = self.endpoint_mode.lock().await;
+        if *cache != Some(EndpointMode::Chat) {
+            logging::warn(format!(
+                "Anthropic Messages API failed for {:?} — retrying via Chat Completions",
+                self.api_provider
+            ));
+            *cache = Some(EndpointMode::Chat);
+        }
+    }
+
+    /// Public getter so the UI / status line can show which endpoint is active.
+    pub async fn endpoint_mode_label(&self) -> &'static str {
+        let cache = self.endpoint_mode.lock().await;
+        match *cache {
+            Some(EndpointMode::Anthropic) => "/anthropic",
+            Some(EndpointMode::Chat) => "/chat",
+            None => "auto",
+        }
+    }
+
+    /// Strip special tokens from the last user message before sending.
+    ///
+    /// If the message becomes empty after stripping (pure injection),
+    /// replace with "你好，请自我介绍一下" so the model gives a normal
+    /// response instead of being anchored to nothing.
+    fn sanitize_request(&self, request: &mut MessageRequest) {
+        for msg in request.messages.iter_mut().rev() {
+            if msg.role != "user" {
+                continue;
+            }
+            for block in &mut msg.content {
+                if let crate::models::ContentBlock::Text { text, .. } = block {
+                    match crate::input_guard::sanitize_user_input(text) {
+                        crate::input_guard::SanitizedInput::Clean(cleaned) => {
+                            if cleaned.is_empty() {
+                                *text = "你好，请自我介绍一下".to_string();
+                            } else {
+                                *text = cleaned;
+                            }
+                        }
+                    }
+                }
+            }
+            break;
+        }
+    }
+}
+
 impl LlmClient for DeepSeekClient {
     fn provider_name(&self) -> &'static str {
         self.api_provider.as_str()
@@ -809,15 +908,42 @@ impl LlmClient for DeepSeekClient {
         }
     }
 
-    async fn create_message(&self, request: MessageRequest) -> Result<MessageResponse> {
-        self.create_message_chat(&request).await
+    async fn create_message(&self, mut request: MessageRequest) -> Result<MessageResponse> {
+        self.sanitize_request(&mut request);
+        let mode = self.resolve_endpoint_mode().await;
+        match mode {
+            EndpointMode::Anthropic => match self.create_message_anthropic(&request).await {
+                Ok(resp) => Ok(resp),
+                Err(_err) => {
+                    self.fallback_to_chat().await;
+                    logging::info(format!("Anthropic endpoint failed; using Chat Completions"));
+                    self.create_message_chat(&request).await
+                }
+            },
+            EndpointMode::Chat => self.create_message_chat(&request).await,
+        }
     }
 
     async fn create_message_stream(
         &self,
-        request: MessageRequest,
+        mut request: MessageRequest,
     ) -> Result<crate::llm_client::StreamEventBox> {
-        self.handle_chat_completion_stream(request).await
+        self.sanitize_request(&mut request);
+        let mode = self.resolve_endpoint_mode().await;
+        match mode {
+            EndpointMode::Anthropic => {
+                let request_clone = request.clone();
+                match self.handle_anthropic_stream(request).await {
+                    Ok(stream) => Ok(stream),
+                    Err(_err) => {
+                        self.fallback_to_chat().await;
+                        logging::info(format!("Anthropic endpoint stream failed; using Chat Completions"));
+                        self.handle_chat_completion_stream(request_clone).await
+                    }
+                }
+            }
+            EndpointMode::Chat => self.handle_chat_completion_stream(request).await,
+        }
     }
 }
 
@@ -906,6 +1032,7 @@ pub(super) fn apply_reasoning_effort(
                 });
             }
             ApiProvider::Openai | ApiProvider::Atlascloud | ApiProvider::Ollama => {}
+            ApiProvider::Anthropic => {} // handled natively via anthropic.rs
             ApiProvider::NvidiaNim => {
                 body["chat_template_kwargs"] = json!({
                     "thinking": false,
@@ -931,6 +1058,7 @@ pub(super) fn apply_reasoning_effort(
                 body["reasoning_effort"] = json!("high");
             }
             ApiProvider::Openai | ApiProvider::Atlascloud | ApiProvider::Ollama => {}
+            ApiProvider::Anthropic => {} // handled natively via anthropic.rs
             ApiProvider::NvidiaNim => {
                 body["chat_template_kwargs"] = json!({
                     "thinking": true,
@@ -957,6 +1085,7 @@ pub(super) fn apply_reasoning_effort(
                 body["reasoning_effort"] = json!("max");
             }
             ApiProvider::Openai | ApiProvider::Atlascloud | ApiProvider::Ollama => {}
+            ApiProvider::Anthropic => {} // handled natively via anthropic.rs
             ApiProvider::NvidiaNim => {
                 body["chat_template_kwargs"] = json!({
                     "thinking": true,

@@ -76,6 +76,10 @@ pub enum ApiProvider {
     Sglang,
     Vllm,
     Ollama,
+    /// DeepSeek's Anthropic-compatible Messages API (`/anthropic/v1/messages`).
+    /// Uses structured content blocks with protocol-level role separation,
+    /// immune to Special Token Injection via user text.
+    Anthropic,
 }
 
 impl ApiProvider {
@@ -95,6 +99,7 @@ impl ApiProvider {
             "sglang" | "sg-lang" => Some(Self::Sglang),
             "vllm" | "v-llm" => Some(Self::Vllm),
             "ollama" | "ollama-local" => Some(Self::Ollama),
+            "anthropic" | "anthropic-messages" | "claude-api" => Some(Self::Anthropic),
             _ => None,
         }
     }
@@ -113,6 +118,7 @@ impl ApiProvider {
             Self::Sglang => "sglang",
             Self::Vllm => "vllm",
             Self::Ollama => "ollama",
+            Self::Anthropic => "anthropic",
         }
     }
 
@@ -131,6 +137,7 @@ impl ApiProvider {
             Self::Sglang => "SGLang",
             Self::Vllm => "vLLM",
             Self::Ollama => "Ollama",
+            Self::Anthropic => "Anthropic Messages API",
         }
     }
 
@@ -148,6 +155,7 @@ impl ApiProvider {
             Self::Sglang,
             Self::Vllm,
             Self::Ollama,
+            Self::Anthropic,
         ]
     }
 }
@@ -204,6 +212,9 @@ pub struct ModelAliasDeprecation {
 pub enum RequestPayloadMode {
     /// Standard OpenAI-compatible `/v1/chat/completions` payload.
     ChatCompletions,
+    /// Anthropic-compatible Messages API (`/anthropic/v1/messages`).
+    /// Uses structured content blocks with protocol-level role separation.
+    AnthropicMessages,
 }
 
 /// Resolve the provider capability for a given [`ApiProvider`] and resolved
@@ -278,8 +289,12 @@ pub fn provider_capability(provider: ApiProvider, resolved_model: &str) -> Provi
         ApiProvider::Deepseek | ApiProvider::DeepseekCN | ApiProvider::NvidiaNim
     );
 
-    // Request payload mode: all current providers use chat completions.
-    let request_payload_mode = RequestPayloadMode::ChatCompletions;
+    // Request payload mode: Anthropic provider uses Messages API, others Chat Completions.
+    let request_payload_mode = if matches!(provider, ApiProvider::Anthropic) {
+        RequestPayloadMode::AnthropicMessages
+    } else {
+        RequestPayloadMode::ChatCompletions
+    };
 
     ProviderCapability {
         provider,
@@ -403,6 +418,7 @@ pub fn model_completion_names_for_provider(provider: ApiProvider) -> Vec<&'stati
         ApiProvider::Openai | ApiProvider::Atlascloud | ApiProvider::Ollama => {
             OFFICIAL_DEEPSEEK_MODELS.to_vec()
         }
+        ApiProvider::Anthropic => OFFICIAL_DEEPSEEK_MODELS.to_vec(),
     }
 }
 
@@ -1205,6 +1221,8 @@ pub struct ProvidersConfig {
     pub vllm: ProviderConfig,
     #[serde(default)]
     pub ollama: ProviderConfig,
+    #[serde(default)]
+    pub anthropic: ProviderConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1314,6 +1332,7 @@ impl Config {
             ApiProvider::Ollama => "providers.ollama",
             ApiProvider::NvidiaNim => "providers.nvidia_nim",
             ApiProvider::Deepseek | ApiProvider::DeepseekCN => return,
+            ApiProvider::Anthropic => "providers.anthropic",
         };
         tracing::warn!(
             "Top-level `base_url = \"{root_base}\"` is ignored for the {provider:?} provider. \
@@ -1452,6 +1471,7 @@ impl Config {
             ApiProvider::Sglang => &providers.sglang,
             ApiProvider::Vllm => &providers.vllm,
             ApiProvider::Ollama => &providers.ollama,
+            ApiProvider::Anthropic => &providers.anthropic,
         })
     }
 
@@ -1516,6 +1536,7 @@ impl Config {
             ApiProvider::Sglang => DEFAULT_SGLANG_MODEL,
             ApiProvider::Vllm => DEFAULT_VLLM_MODEL,
             ApiProvider::Ollama => DEFAULT_OLLAMA_MODEL,
+            ApiProvider::Anthropic => DEFAULT_TEXT_MODEL,
         }
         .to_string()
     }
@@ -1545,7 +1566,8 @@ impl Config {
             | ApiProvider::Fireworks
             | ApiProvider::Sglang
             | ApiProvider::Vllm
-            | ApiProvider::Ollama => None,
+            | ApiProvider::Ollama
+            | ApiProvider::Anthropic => None,
         };
         let base = provider_base.or(root_base).unwrap_or_else(|| {
             match provider {
@@ -1560,6 +1582,7 @@ impl Config {
                 ApiProvider::Sglang => DEFAULT_SGLANG_BASE_URL,
                 ApiProvider::Vllm => DEFAULT_VLLM_BASE_URL,
                 ApiProvider::Ollama => DEFAULT_OLLAMA_BASE_URL,
+                ApiProvider::Anthropic => DEFAULT_DEEPSEEK_BASE_URL,
             }
             .to_string()
         });
@@ -1592,6 +1615,7 @@ impl Config {
             ApiProvider::Sglang => "sglang",
             ApiProvider::Vllm => "vllm",
             ApiProvider::Ollama => "ollama",
+            ApiProvider::Anthropic => "anthropic",
         };
 
         // 0. DeepSeek compatibility slot. The legacy top-level `api_key`
@@ -1669,6 +1693,13 @@ impl Config {
             // Self-hosted deployments commonly run without auth on localhost.
             // Return an empty key and let the client omit the Authorization header.
             ApiProvider::Sglang | ApiProvider::Vllm | ApiProvider::Ollama => Ok(String::new()),
+            ApiProvider::Anthropic => anyhow::bail!(
+                "Anthropic Messages API key not found.\n\
+                 \n\
+                 1. Set ANTHROPIC_API_KEY=<your-key> in your environment, or\n\
+                 2. Run 'deepseek auth set --provider anthropic', or\n\
+                 3. Add [providers.anthropic] api_key in ~/.deepseek/config.toml"
+            ),
         }
     }
 
@@ -2145,6 +2176,13 @@ fn apply_env_overrides(config: &mut Config) {
             ApiProvider::Deepseek | ApiProvider::DeepseekCN => {
                 config.base_url = Some(value);
             }
+            ApiProvider::Anthropic => {
+                config
+                    .providers
+                    .get_or_insert_with(ProvidersConfig::default)
+                    .anthropic
+                    .base_url = Some(value);
+            }
             ApiProvider::NvidiaNim => {
                 config
                     .providers
@@ -2318,6 +2356,7 @@ fn apply_env_overrides(config: &mut Config) {
             ApiProvider::Sglang => &mut providers.sglang,
             ApiProvider::Vllm => &mut providers.vllm,
             ApiProvider::Ollama => &mut providers.ollama,
+            ApiProvider::Anthropic => &mut providers.anthropic,
         };
         let mut provider_headers = entry.http_headers.clone().unwrap_or_default();
         provider_headers.extend(headers);
@@ -2612,7 +2651,7 @@ fn normalize_model_for_provider(provider: ApiProvider, model: &str) -> Option<St
 pub(crate) fn provider_passes_model_through(provider: ApiProvider) -> bool {
     matches!(
         provider,
-        ApiProvider::Openai | ApiProvider::Atlascloud | ApiProvider::Ollama
+        ApiProvider::Openai | ApiProvider::Atlascloud | ApiProvider::Ollama | ApiProvider::Anthropic
     )
 }
 
@@ -2636,6 +2675,7 @@ fn default_base_url_for_provider(provider: ApiProvider) -> &'static str {
         ApiProvider::Sglang => DEFAULT_SGLANG_BASE_URL,
         ApiProvider::Vllm => DEFAULT_VLLM_BASE_URL,
         ApiProvider::Ollama => DEFAULT_OLLAMA_BASE_URL,
+        ApiProvider::Anthropic => DEFAULT_DEEPSEEK_BASE_URL,
     }
 }
 
@@ -2866,6 +2906,7 @@ fn merge_providers(
             sglang: merge_provider_config(base.sglang, override_cfg.sglang),
             vllm: merge_provider_config(base.vllm, override_cfg.vllm),
             ollama: merge_provider_config(base.ollama, override_cfg.ollama),
+            anthropic: merge_provider_config(base.anthropic, override_cfg.anthropic),
         }),
     }
 }
@@ -3275,6 +3316,10 @@ pub fn active_provider_has_env_api_key(config: &Config) -> bool {
         ApiProvider::Sglang => std::env::var("SGLANG_API_KEY").is_ok_and(|k| !k.trim().is_empty()),
         ApiProvider::Vllm => std::env::var("VLLM_API_KEY").is_ok_and(|k| !k.trim().is_empty()),
         ApiProvider::Ollama => std::env::var("OLLAMA_API_KEY").is_ok_and(|k| !k.trim().is_empty()),
+        ApiProvider::Anthropic => {
+            std::env::var("ANTHROPIC_API_KEY").is_ok_and(|k| !k.trim().is_empty())
+                || std::env::var("DEEPSEEK_API_KEY").is_ok_and(|k| !k.trim().is_empty())
+        }
     }
 }
 
@@ -3299,12 +3344,18 @@ pub fn has_api_key_for(config: &Config, provider: ApiProvider) -> bool {
         ApiProvider::Sglang => "SGLANG_API_KEY",
         ApiProvider::Vllm => "VLLM_API_KEY",
         ApiProvider::Ollama => "OLLAMA_API_KEY",
+        ApiProvider::Anthropic => "ANTHROPIC_API_KEY",
     };
     if std::env::var(env_var).is_ok_and(|k| !k.trim().is_empty()) {
         return true;
     }
     if matches!(provider, ApiProvider::NvidiaNim)
         && std::env::var("NVIDIA_NIM_API_KEY").is_ok_and(|k| !k.trim().is_empty())
+    {
+        return true;
+    }
+    if matches!(provider, ApiProvider::Anthropic)
+        && std::env::var("DEEPSEEK_API_KEY").is_ok_and(|k| !k.trim().is_empty())
     {
         return true;
     }
@@ -3372,6 +3423,7 @@ pub fn save_api_key_for(provider: ApiProvider, api_key: &str) -> Result<PathBuf>
         ApiProvider::Sglang => "providers.sglang",
         ApiProvider::Vllm => "providers.vllm",
         ApiProvider::Ollama => "providers.ollama",
+        ApiProvider::Anthropic => "providers.anthropic",
     };
 
     // Parse existing TOML (or start fresh) so we can edit the right table
@@ -3407,6 +3459,7 @@ pub fn save_api_key_for(provider: ApiProvider, api_key: &str) -> Result<PathBuf>
         ApiProvider::Sglang => "sglang",
         ApiProvider::Vllm => "vllm",
         ApiProvider::Ollama => "ollama",
+        ApiProvider::Anthropic => "anthropic",
     };
     let entry = providers
         .entry(key_inside.to_string())

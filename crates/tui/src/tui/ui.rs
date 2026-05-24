@@ -3867,7 +3867,18 @@ async fn dispatch_user_message(
         &app.workspace,
         cwd.clone(),
     );
-    let content = queued_message_content_for_app(app, &message, cwd);
+    let content = {
+        let user_request = crate::tui::file_mention::user_request_with_file_mentions(
+            &message.display,
+            &app.workspace,
+            cwd,
+        );
+        if let Some(skill_instruction) = message.skill_instruction.as_ref() {
+            format!("{skill_instruction}\n\n---\n\nUser request: {user_request}")
+        } else {
+            user_request
+        }
+    };
     let message_index = app.api_messages.len();
     app.system_prompt = Some(
         prompts::system_prompt_for_mode_with_context_skills_and_session(
@@ -5470,6 +5481,7 @@ fn render(f: &mut Frame, app: &mut App) {
             crate::config::ApiProvider::Sglang => Some("SGLang"),
             crate::config::ApiProvider::Vllm => Some("vLLM"),
             crate::config::ApiProvider::Ollama => Some("Ollama"),
+            crate::config::ApiProvider::Anthropic => Some("Anthr"),
         };
         let status_indicator_started_at = if app.low_motion {
             None
@@ -6186,6 +6198,7 @@ async fn apply_provider_picker_api_key(
             ApiProvider::Sglang => &mut providers.sglang,
             ApiProvider::Vllm => &mut providers.vllm,
             ApiProvider::Ollama => &mut providers.ollama,
+            ApiProvider::Anthropic => &mut providers.anthropic,
         };
         entry.api_key = Some(api_key);
     }
